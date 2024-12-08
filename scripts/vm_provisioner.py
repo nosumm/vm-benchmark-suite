@@ -12,6 +12,7 @@ import time
 import paramiko
 import base64
 import requests
+import xml.etree.ElementTree as ET 
 from tempfile import NamedTemporaryFile
 
 class VMProvisioner:
@@ -33,10 +34,49 @@ class VMProvisioner:
             raise
         
     def setup_directories(self):
-        """Create necessary directories for VM management"""
+        """Create necessary directories for VM management and set proper permissions"""
         dirs = ['images', 'cloud-init', 'keys']
         for dir_name in dirs:
-            (self.project_root / dir_name).mkdir(exist_ok=True)
+            dir_path = self.project_root / dir_name
+            dir_path.mkdir(exist_ok=True)
+            
+            # Set permissions to allow libvirt access
+            try:
+                # Try to set directory permissions
+                subprocess.run([
+                    'sudo', 'chown', '-R',
+                    f'{os.getenv("USER")}:libvirt',
+                    str(dir_path)
+                ])
+                subprocess.run([
+                    'sudo', 'chmod', '-R',
+                    '775',  # User and group can read/write/execute
+                    str(dir_path)
+                ])
+            except subprocess.CalledProcessError as e:
+                logging.warning(f"Failed to set permissions on {dir_path}: {e}")
+                logging.warning("You might need to run: sudo chmod 775 -R /path/to/project/images")
+
+        # Also ensure we have access to libvirt images directory
+        subprocess.run([
+            'sudo', 'chmod', '775',
+            '/var/lib/libvirt/images'
+        ], check=False)
+
+        # Add current user to libvirt group if not already
+        groups = subprocess.check_output(['groups']).decode().split()
+        if 'libvirt' not in groups:
+            logging.warning("Current user is not in libvirt group. Running command to add...")
+            try:
+                subprocess.run([
+                    'sudo', 'usermod', '-a', '-G',
+                    'libvirt',
+                    os.getenv("USER")
+                ])
+                logging.info("Added user to libvirt group. You may need to log out and back in for changes to take effect.")
+            except subprocess.CalledProcessError as e:
+                logging.warning(f"Failed to add user to libvirt group: {e}")
+                logging.warning("You may need to run: sudo usermod -a -G libvirt $USER")
 
     def connect(self):
         """Establish connection to QEMU/KVM hypervisor."""
@@ -54,9 +94,31 @@ class VMProvisioner:
             logging.info("Downloading Ubuntu cloud image...")
             url = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
             response = requests.get(url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 1024  # 1 Kibibyte
+            progress = 0
+
             with open(image_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                for data in response.iter_content(block_size):
+                    progress += len(data)
+                    f.write(data)
+                    done = int(50 * progress / total_size)
+                    if total_size > 0:
+                        sys.stdout.write('\r[{}{}] {:.1f}%'.format(
+                            '=' * done, 
+                            ' ' * (50-done), 
+                            100 * progress / total_size))
+                        sys.stdout.flush()
+            
+            print()  # New line after progress bar
+            logging.info("Download completed. Verifying image...")
+            
+            # Verify the image exists and has content
+            if not image_path.exists() or image_path.stat().st_size == 0:
+                raise Exception("Failed to download Ubuntu cloud image")
+                
+            logging.info("Image verification successful")
+            
         return image_path
     
     def _generate_ssh_key(self):
