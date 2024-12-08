@@ -1,0 +1,58 @@
+# Main configuration file for VM Performance Benchmark Suite
+# main_config.yaml
+
+# Test matrix - VM configurations to test
+test_matrix:
+  - small
+  - medium
+  - large
+
+# VM access credentials
+vm_credentials:
+  username: ubuntu
+  password: password  # In practice, use secure password storage
+
+# Benchmark parameters
+benchmarks:
+  parallel_execution: true
+  retry_count: 3
+  timeout_minutes: 60
+
+# Result handling
+results:
+  save_raw_data: true
+  generate_visualizations: true
+  save_format: json
+  compress_results: true
+
+# Notification settings (optional)
+email:
+  enabled: false
+  smtp_server: smtp.example.com
+  smtp_port: 587
+  username: benchmark@example.com
+  password: emailpassword
+  from: benchmark@example.com
+  to: admin@example.com
+
+# Resource cleanup
+cleanup:
+  force: true
+  preserve_failed: false
+  timeout_minutes: 10
+
+# Logging
+logging:
+  level: INFO
+  save_to_file: true
+  log_file: benchmark_run.log
+  rotate_logs: true
+  max_log_size_mb: 100
+  max_log_files: 5
+
+# Advanced options
+advanced:
+  vm_startup_wait_seconds: 30
+  health_check_retries: 3
+  health_check_interval_seconds: 10
+  network_timeout_seconds: 300

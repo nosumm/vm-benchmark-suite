@@ -1,0 +1,36 @@
+cpu_benchmark:
+  sysbench_cpu:
+    max_prime: 20000
+    threads: [1, 2, 4]
+    time: 60
+
+memory_benchmark:
+  sysbench_memory:
+    total_size: 10G
+    block_size: [4K, 1M]
+    threads: [1, 2, 4]
+    time: 60
+
+disk_benchmark:
+  fio:
+    runtime: 60
+    filesize: 4G
+    tests:
+      - name: random_read
+        rw: randread
+        bs: 4k
+      - name: random_write
+        rw: randwrite
+        bs: 4k
+      - name: sequential_read
+        rw: read
+        bs: 1m
+      - name: sequential_write
+        rw: write
+        bs: 1m
+
+network_benchmark:
+  iperf3:
+    time: 60
+    parallel: 4
+    protocol: tcp
